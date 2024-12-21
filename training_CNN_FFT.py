@@ -1,10 +1,9 @@
 import numpy as np
 import cv2
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 import os
-
 
 def preprocess_image_fft(image_path):
     """
@@ -26,7 +25,6 @@ def preprocess_image_fft(image_path):
     normalized_spectrum = (magnitude_spectrum - np.min(magnitude_spectrum)) / \
                           (np.max(magnitude_spectrum) - np.min(magnitude_spectrum) + 1e-7)
     return normalized_spectrum
-
 
 def load_dataset_fft(dataset_path):
     """
@@ -51,7 +49,6 @@ def load_dataset_fft(dataset_path):
                     print(f"Error processing file {image_path}: {e}")
     return np.array(data), np.array(labels)
 
-
 def create_cnn_model(input_shape):
     """
     Create a CNN model for analyzing frequency domain images.
@@ -66,9 +63,14 @@ def create_cnn_model(input_shape):
         Dense(1, activation='sigmoid')  # Binary classification
     ])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     return model
 
+#Generate a standardized filename for model files.
+def generate_model_filename(base_name="fft_cnn_model"):
+    version = 1
+    while os.path.exists(os.path.join(model_dir, f"{base_name}_v{version}.h5")):
+        version += 1
+    return f"{base_name}_v{version}.h5"
 
 if __name__ == "__main__":
     dataset_path = "CASIA2"
@@ -84,11 +86,21 @@ if __name__ == "__main__":
 
     X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
 
+    # Model file naming scheme
+    base_name = "fft_cnn_model"
+    model_dir = "trained_models"
+    os.makedirs(model_dir, exist_ok=True)
+    model_file = os.path.join(model_dir, generate_model_filename(base_name))
+
     # Create and train the CNN model
     model = create_cnn_model(input_shape=(128, 128, 1))
     print("Training model...")
     model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test))
     print("Model training completed.")
+
+    # Save the trained model
+    model.save(model_file)
+    print(f"Model saved as '{model_file}'")
 
     # Evaluate the model
     test_loss, test_accuracy = model.evaluate(X_test, y_test)
