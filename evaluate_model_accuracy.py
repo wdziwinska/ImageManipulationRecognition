@@ -43,19 +43,24 @@ val_generator = val_datagen.flow_from_directory(
     shuffle=False
 )
 
-# Załaduj wytrenowany model
-model = load_model(latest_model_path)
-print(f"Załadowano model: {latest_model_path}")
+# Mapa klas - ręczne przypisanie
+class_mapping = {
+    'manipulated': 1,  # Manipulowane obrazy jako klasa 1
+    'original': 0      # Oryginalne obrazy jako klasa 0
+}
 
-# Ewaluacja modelu
-eval_results = model.evaluate(val_generator)
-print(f"Dokładność na zbiorze walidacyjnym: {eval_results[1] * 100:.2f}%")
+if __name__ == "__main__":
+    # Załaduj wytrenowany model
+    model = load_model(latest_model_path)
+    print(f"Załadowano model: {latest_model_path}")
 
-# Dokonanie predykcji na zbiorze walidacyjnym
-predictions = model.predict(val_generator)
-predicted_classes = (predictions > 0.5).astype(int).flatten()
-true_classes = val_generator.classes
 
-# Oblicz dokładność
-accuracy = accuracy_score(true_classes, predicted_classes)
-print(f"Dokładność (sklearn) na zbiorze walidacyjnym: {accuracy * 100:.2f}%")
+    # Dokonanie predykcji na zbiorze walidacyjnym
+    predictions = model.predict(val_generator)
+    predicted_classes = (predictions > 0.5).astype(int).flatten()
+    # true_classes = val_generator.classes
+    true_classes = np.array([class_mapping[os.path.dirname(f).split(os.path.sep)[-1]] for f in val_generator.filenames])
+
+    # Oblicz dokładność
+    accuracy = accuracy_score(true_classes, predicted_classes)
+    print(f"Dokładność (sklearn) na zbiorze walidacyjnym: {accuracy * 100:.2f}%")
