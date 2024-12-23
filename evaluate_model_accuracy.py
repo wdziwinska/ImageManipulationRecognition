@@ -9,16 +9,11 @@ base_path = "CASIA2/dataset_split"
 val_path = os.path.join(base_path, "val")
 models_path = "trained_models"  # Podaj ścieżkę do katalogu z modelami
 
-# Funkcja do znalezienia najnowszego modelu
-def get_latest_model(models_directory):
+# Funkcja do znalezienia wszystkich modeli
+def get_all_models(models_directory):
     model_files = [f for f in os.listdir(models_directory) if f.startswith("fft_cnn_model_v") and f.endswith(".h5")]
     model_files.sort(key=lambda x: int(x.split('_v')[-1].split('.')[0]))  # Sortuj według wersji
-    return os.path.join(models_directory, model_files[-1]) if model_files else None
-
-# Znajdź najnowszy model
-latest_model_path = get_latest_model(models_path)
-if not latest_model_path:
-    raise FileNotFoundError("Nie znaleziono żadnego modelu w katalogu: " + models_path)
+    return [os.path.join(models_directory, f) for f in model_files]
 
 # Przygotowanie danych
 image_size = (128, 128)  # Rozmiar obrazu
@@ -50,17 +45,22 @@ class_mapping = {
 }
 
 if __name__ == "__main__":
-    # Załaduj wytrenowany model
-    model = load_model(latest_model_path)
-    print(f"Załadowano model: {latest_model_path}")
+    model_paths = get_all_models(models_path)
+    if not model_paths:
+        raise FileNotFoundError("Nie znaleziono żadnego modelu w katalogu: " + models_path)
 
-
-    # Dokonanie predykcji na zbiorze walidacyjnym
-    predictions = model.predict(val_generator)
-    predicted_classes = (predictions > 0.5).astype(int).flatten()
-    # true_classes = val_generator.classes
+    # Przypisanie prawdziwych klas zgodnie z mapą
     true_classes = np.array([class_mapping[os.path.dirname(f).split(os.path.sep)[-1]] for f in val_generator.filenames])
 
-    # Oblicz dokładność
-    accuracy = accuracy_score(true_classes, predicted_classes)
-    print(f"Dokładność (sklearn) na zbiorze walidacyjnym: {accuracy * 100:.2f}%")
+    # Iteracja po wszystkich modelach i obliczanie dokładności
+    for model_path in model_paths:
+        model = load_model(model_path)
+        print(f"Załadowano model: {model_path}")
+
+        # Dokonanie predykcji na zbiorze walidacyjnym
+        predictions = model.predict(val_generator)
+        predicted_classes = (predictions > 0.5).astype(int).flatten()
+
+        # Oblicz dokładność
+        accuracy = accuracy_score(true_classes, predicted_classes)
+        print(f"Dokładność dla modelu {model_path}: {accuracy * 100:.2f}%\n")
