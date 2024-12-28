@@ -4,6 +4,8 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 import os
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.optimizers import Adam
 
 def preprocess_image_fft(image_path):
     """
@@ -58,11 +60,17 @@ def create_cnn_model(input_shape):
         MaxPooling2D((2, 2)),
         Conv2D(64, (3, 3), activation='relu'),
         MaxPooling2D((2, 2)),
+        Conv2D(128, (3, 3), activation='relu'),
+        MaxPooling2D((2, 2)),
+        Conv2D(256, (3, 3), activation='relu'),
+        MaxPooling2D((2, 2)),
+        Conv2D(512, (3, 3), activation='relu'),
+        MaxPooling2D((2, 2)),
         Flatten(),
-        Dense(128, activation='relu'),
-        Dense(1, activation='sigmoid')  # Binary classification
+        Dense(1024, activation='relu', kernel_regularizer=l2(0.01)),
+        Dense(1, activation='sigmoid') # Binary classification
     ])
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer=Adam(learning_rate=0.1), loss='binary_crossentropy', metrics=['accuracy'])
     return model
 
 #Generate a standardized filename for model files.
@@ -74,6 +82,7 @@ def generate_model_filename(base_name="fft_cnn_model"):
 
 if __name__ == "__main__":
     dataset_path = "CASIA2"
+    dataset_path_val = "CASIA2/dataset_split/val"
 
     # Load and preprocess dataset
     print("Loading dataset...")
@@ -81,10 +90,15 @@ if __name__ == "__main__":
     data = data[..., np.newaxis]  # Add channel dimension
     print("Dataset loaded.")
 
+    print("Loading validation dataset...")
+    val_data, val_labels = load_dataset_fft(dataset_path)
+    val_data = val_data[..., np.newaxis]  # Add channel dimension
+    print("Validation dataset loaded.")
+
     # Split into train and test sets
     from sklearn.model_selection import train_test_split
 
-    X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
+    # X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.2, random_state=42)
 
     # Model file naming scheme
     base_name = "fft_cnn_model"
@@ -95,7 +109,7 @@ if __name__ == "__main__":
     # Create and train the CNN model
     model = create_cnn_model(input_shape=(128, 128, 1))
     print("Training model...")
-    model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test))
+    model.fit(data, labels, epochs=10, batch_size=32, validation_data=(val_data, val_labels), shuffle=True)
     print("Model training completed.")
 
     # Save the trained model
@@ -103,5 +117,5 @@ if __name__ == "__main__":
     print(f"Model saved as '{model_file}'")
 
     # Evaluate the model
-    test_loss, test_accuracy = model.evaluate(X_test, y_test)
+    test_loss, test_accuracy = model.evaluate(val_data, val_labels)
     print(f"Test Accuracy: {test_accuracy * 100:.2f}%")
