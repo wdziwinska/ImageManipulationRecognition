@@ -3,11 +3,11 @@ import random
 import shutil
 
 # Ścieżki do folderów źródłowych
-manipulated_dir = "CASIA2/manipulated"
-original_dir = "CASIA2/original"
+manipulated_dir = "CASIA2/fft_spectrum/manipulated"
+original_dir = "CASIA2/fft_spectrum/original"
 
 # Ścieżki do folderów docelowych
-output_dir = "CASIA2/dataset_split"
+output_dir = "CASIA2/fft_spectrum/dataset_split"
 test_dir = os.path.join(output_dir, "test")
 val_dir = os.path.join(output_dir, "val")
 
