@@ -10,6 +10,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score
 from imblearn.over_sampling import SMOTE
+from tensorflow.python.keras.callbacks import EarlyStopping
 
 
 def load_dataset_fft(dataset_path):
@@ -73,7 +74,7 @@ def create_cnn_model(input_shape):
         Dense(1024, activation='relu', kernel_regularizer=l2(0.01)),
         Dense(1, activation='sigmoid')  # Binary classification
     ])
-    model.compile(optimizer=Adam(learning_rate=0.0001), loss='binary_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy', metrics=['accuracy'])
     return model
 
 
@@ -121,11 +122,25 @@ if __name__ == "__main__":
     )
     augmentor.fit(data)
 
+    # for train_index, val_index in skf.split(data, labels):
+    #     X_train, X_val = data[train_index], data[val_index]
+    #     y_train, y_val = labels[train_index], labels[val_index]
+    #     model.fit(augmentor.flow(X_train, y_train, batch_size=32), epochs=10, validation_data=(X_val, y_val), shuffle=True)
+    # print("Model training completed.")
+    #
+    # early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    # model.fit(augmentor.flow(data, labels, batch_size=32), epochs=50, validation_data=(val_data, val_labels),
+    #           callbacks=[early_stopping], shuffle=True)
+    # print("Model training completed.")
+
     for train_index, val_index in skf.split(data, labels):
         X_train, X_val = data[train_index], data[val_index]
         y_train, y_val = labels[train_index], labels[val_index]
-        model.fit(augmentor.flow(X_train, y_train, batch_size=32), epochs=20, validation_data=(X_val, y_val),
-                  shuffle=True)
+
+        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+        model.fit(augmentor.flow(X_train, y_train, batch_size=32), epochs=30,
+                  validation_data=(X_val, y_val), callbacks=[early_stopping], shuffle=True)
+
     print("Model training completed.")
 
     # Save the trained model
