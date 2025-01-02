@@ -63,7 +63,7 @@ if __name__ == "__main__":
     val_data = val_data[..., np.newaxis]
 
     # Iteracja po wszystkich modelach i obliczanie dokładności
-    for model_path in model_paths[-3:]:
+    for model_path in model_paths[-6:]:
         model = load_model(model_path)
         print(f"Załadowano model: {model_path}")
 

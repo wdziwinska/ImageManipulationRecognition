@@ -11,7 +11,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score
 from imblearn.over_sampling import SMOTE
 from tensorflow.python.keras.callbacks import EarlyStopping
-
+from tensorflow.keras.callbacks import ReduceLROnPlateau
 
 def load_dataset_fft(dataset_path):
     data = []
@@ -39,19 +39,16 @@ def load_dataset_fft(dataset_path):
 
     data, labels = np.array(data), np.array(labels)
 
-    # Sprawdzenie liczby klas przed użyciem SMOTE
     unique_classes, counts = np.unique(labels, return_counts=True)
     if len(unique_classes) < 2:
         print("Warning: Not enough class diversity for SMOTE. Skipping SMOTE.")
-        return data, labels  # Zwracamy dane bez SMOTE, jeśli nie można go zastosować
+        return data, labels
 
-    # Jeśli dane są prawidłowe, stosujemy SMOTE
     smote = SMOTE()
     data, labels = smote.fit_resample(data.reshape(len(data), -1), labels)
     data = data.reshape(-1, 128, 128, 1)
 
     return data, labels
-
 
 def create_cnn_model(input_shape):
     model = Sequential([
@@ -72,11 +69,10 @@ def create_cnn_model(input_shape):
         MaxPooling2D((2, 2)),
         Flatten(),
         Dense(1024, activation='relu', kernel_regularizer=l2(0.01)),
-        Dense(1, activation='sigmoid')  # Binary classification
+        Dense(1, activation='sigmoid')
     ])
     model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy', metrics=['accuracy'])
     return model
-
 
 def generate_model_filename(base_name="fft_cnn_model"):
     version = 1
@@ -84,73 +80,67 @@ def generate_model_filename(base_name="fft_cnn_model"):
         version += 1
     return f"{base_name}_v{version}.h5"
 
-
 if __name__ == "__main__":
     dataset_path = "CASIA2/fft_spectrum"
     dataset_path_val = "CASIA2/fft_spectrum/dataset_split/val"
 
-    # Load and preprocess dataset
     print("Loading dataset...")
     data, labels = load_dataset_fft(dataset_path)
     print("Dataset loaded.")
 
     print("Loading validation dataset...")
     val_data, val_labels = load_dataset_fft(dataset_path_val)
-    val_data = val_data[..., np.newaxis]  # Add channel dimension
+    val_data = val_data[..., np.newaxis]
     print("Validation dataset loaded.")
 
-    # Apply cross-validation
-    skf = StratifiedKFold(n_splits=2, shuffle=True, random_state=42)
-
-    # Model file naming scheme
     base_name = "fft_cnn_model"
     model_dir = "trained_models"
     os.makedirs(model_dir, exist_ok=True)
-    model_file = os.path.join(model_dir, generate_model_filename(base_name))
 
-    # Create and train the CNN model
-    model = create_cnn_model(input_shape=(128, 128, 1))
-    print("Training model...")
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
-    # Augmentacja danych
-    augmentor = ImageDataGenerator(
-        rotation_range=20,
-        width_shift_range=0.2,
-        height_shift_range=0.2,
-        zoom_range=0.2,
-        horizontal_flip=True
-    )
-    augmentor.fit(data)
-
-    # for train_index, val_index in skf.split(data, labels):
-    #     X_train, X_val = data[train_index], data[val_index]
-    #     y_train, y_val = labels[train_index], labels[val_index]
-    #     model.fit(augmentor.flow(X_train, y_train, batch_size=32), epochs=10, validation_data=(X_val, y_val), shuffle=True)
-    # print("Model training completed.")
-    #
-    # early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-    # model.fit(augmentor.flow(data, labels, batch_size=32), epochs=50, validation_data=(val_data, val_labels),
-    #           callbacks=[early_stopping], shuffle=True)
-    # print("Model training completed.")
+    val_accuracies = []
 
     for train_index, val_index in skf.split(data, labels):
         X_train, X_val = data[train_index], data[val_index]
         y_train, y_val = labels[train_index], labels[val_index]
 
+        model = create_cnn_model(input_shape=(128, 128, 1))
+
+        augmentor = ImageDataGenerator(
+            rotation_range=20,
+            width_shift_range=0.2,
+            height_shift_range=0.2,
+            zoom_range=0.2,
+            horizontal_flip=True
+        )
+        augmentor.fit(X_train)
+
         early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-        model.fit(augmentor.flow(X_train, y_train, batch_size=32), epochs=30,
-                  validation_data=(X_val, y_val), callbacks=[early_stopping], shuffle=True)
+        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6)
 
-    print("Model training completed.")
+        history = model.fit(
+            augmentor.flow(X_train, y_train, batch_size=32),
+            epochs=30,
+            validation_data=(X_val, y_val),
+            callbacks=[early_stopping, reduce_lr],
+            shuffle=True
+        )
 
-    # Save the trained model
+        val_accuracies.append(max(history.history['val_accuracy']))
+
+    print(f"Average Validation Accuracy: {np.mean(val_accuracies):.2f}")
+
+    # Train final model on entire dataset
+    model = create_cnn_model(input_shape=(128, 128, 1))
+    augmentor.fit(data)
+    model.fit(
+        augmentor.flow(data, labels, batch_size=32),
+        epochs=30,
+        callbacks=[early_stopping, reduce_lr],
+        shuffle=True
+    )
+
+    model_file = os.path.join(model_dir, generate_model_filename(base_name))
     model.save(model_file)
     print(f"Model saved as '{model_file}'")
-
-    # Evaluate the model
-    # test_loss, test_accuracy = model.evaluate(X_val, y_val)
-    # predictions = model.predict(X_val)
-    # predicted_classes = (predictions > 0.5).astype(int).flatten()
-    # accuracy = accuracy_score(y_val, predicted_classes)
-    # print(f"Validation Accuracy (calculated separately): {accuracy * 100:.2f}%")
-    # print(f"Test Accuracy: {test_accuracy * 100:.2f}%")
