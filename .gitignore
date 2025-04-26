@@ -10,8 +10,11 @@ CASIA2/CASIA 2 Groundtruth
 CASIA2/dataset_split
 CASIA2/manipulated
 CASIA2/original
-
+dataset
 CocoGlide
+
+trained_models
+test
 
 # User-specific stuff
 .idea
